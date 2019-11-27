@@ -241,6 +241,8 @@ struct Http1Settings {
 
   // How header keys should be formatted when serializing HTTP/1.1 headers.
   HeaderKeyFormat header_key_format_{HeaderKeyFormat::Default};
+  // Enabled h2c upgrade.
+  bool enable_h2c_upgrade_{false};
 };
 
 /**

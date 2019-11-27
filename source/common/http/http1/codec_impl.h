@@ -199,6 +199,8 @@ protected:
 
   bool resetStreamCalled() { return reset_stream_called_; }
 
+  virtual int onH2cUpgrade(const HeaderMapImplPtr& headers);
+
   Network::Connection& connection_;
   CodecStats stats_;
   http_parser parser_;
@@ -206,6 +208,7 @@ protected:
   Http::Code error_code_{Http::Code::BadRequest};
   const HeaderKeyFormatterPtr header_key_formatter_;
   bool handling_upgrade_ : 1;
+  bool handling_h2c_upgrade_ : 1;
   bool reset_stream_called_ : 1;
   const bool strict_header_validation_ : 1;
   const bool connection_header_sanitization_ : 1;

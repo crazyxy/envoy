@@ -8,6 +8,7 @@
 #include "common/common/empty_string.h"
 #include "common/common/utility.h"
 #include "common/http/headers.h"
+#include "common/http/auto/codec_impl.h"
 #include "common/http/http1/codec_impl.h"
 #include "common/http/http2/codec_impl.h"
 #include "common/http/path_utility.h"
@@ -48,9 +49,15 @@ ServerConnectionPtr ConnectionManagerUtility::autoCreateCodec(
                                                          http2_settings, max_request_headers_kb,
                                                          max_request_headers_count);
   } else {
-    return std::make_unique<Http1::ServerConnectionImpl>(connection, scope, callbacks,
-                                                         http1_settings, max_request_headers_kb,
-                                                         max_request_headers_count);
+    if (http1_settings.enable_h2c_upgrade_) {
+      return std::make_unique<Auto::ServerConnectionImpl>(
+          connection, callbacks, scope, http1_settings, http2_settings, max_request_headers_kb,
+          max_request_headers_count);
+    } else {
+      return std::make_unique<Http1::ServerConnectionImpl>(connection, scope, callbacks,
+                                                           http1_settings, max_request_headers_kb,
+                                                           max_request_headers_count);
+    }
   }
 }
 

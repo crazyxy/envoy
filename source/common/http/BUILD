@@ -180,6 +180,7 @@ envoy_cc_library(
         "//source/common/common:regex_lib",
         "//source/common/common:scope_tracker",
         "//source/common/common:utility_lib",
+        "//source/common/http/auto:codec_lib",
         "//source/common/http/http1:codec_lib",
         "//source/common/http/http2:codec_lib",
         "//source/common/network:utility_lib",

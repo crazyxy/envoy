@@ -83,6 +83,10 @@ message Http1ProtocolOptions {
   // Describes how the keys for response headers should be formatted. By default, all header keys
   // are lower cased.
   HeaderKeyFormat header_key_format = 4;
+
+  // If the upstream connection uses HTTP1, turning on this flag will enable h2c upgrade for
+  // upstream connection.
+  bool enable_h2c_upgrade = 5;
 }
 
 // [#next-free-field: 13]
