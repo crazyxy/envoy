@@ -472,6 +472,9 @@ void Filter::onPoolReady(Tcp::ConnectionPool::ConnectionDataPtr&& conn_data,
   upstream_callbacks_->onEvent(Network::ConnectionEvent::Connected);
 
   read_callbacks_->continueReading();
+
+  ENVOY_CONN_LOG(debug, "xydebug: downstream fd {}, upstream fd {}", read_callbacks_->connection(),
+                 downstreamConnection()->fd(), connection.fd());
 }
 
 void Filter::onConnectTimeout() {
