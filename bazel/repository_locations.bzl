@@ -215,6 +215,11 @@ REPOSITORY_LOCATIONS = dict(
         strip_prefix = "twitter.common.finagle-thrift-0.3.9/src",
         urls = ["https://files.pythonhosted.org/packages/f9/e7/4f80d582578f8489226370762d2cf6bc9381175d1929eba1754e03f70708/twitter.common.finagle-thrift-0.3.9.tar.gz"],
     ),
+    com_github_libbpf_libbpf = dict(
+        sha256 = "3e29c012ab227c0435b5a81f0edf193639fdd26699424089696fb47b76f06f17",
+        strip_prefix = "libbpf-868739519894fbf2cdb81f1f9222f1b665670096",
+        urls = ["https://github.com/libbpf/libbpf/archive/868739519894fbf2cdb81f1f9222f1b665670096.tar.gz"],
+    ),
     com_google_googletest = dict(
         sha256 = "cbd251a40485fddd44cdf641af6df2953d45695853af6d68aeb11c7efcde6771",
         strip_prefix = "googletest-d7003576dd133856432e2e07340f45926242cc3a",

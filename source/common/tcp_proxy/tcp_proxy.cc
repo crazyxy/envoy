@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <sys/resource.h>
 
 #include "envoy/buffer/buffer.h"
 #include "envoy/config/accesslog/v3alpha/accesslog.pb.h"
@@ -14,6 +15,7 @@
 
 #include "common/access_log/access_log_impl.h"
 #include "common/common/assert.h"
+#include "common/bpf/util.h"
 #include "common/common/empty_string.h"
 #include "common/common/enum_to_int.h"
 #include "common/common/fmt.h"
@@ -475,6 +477,22 @@ void Filter::onPoolReady(Tcp::ConnectionPool::ConnectionDataPtr&& conn_data,
 
   ENVOY_CONN_LOG(debug, "xydebug: downstream fd {}, upstream fd {}", read_callbacks_->connection(),
                  downstreamConnection()->fd(), connection.fd());
+
+  // /* [*] SOCKMAP requires more than 16MiB of locked mem */
+  // struct rlimit rlim = {
+  //     .rlim_cur = 128 * 1024 * 1024,
+  //     .rlim_max = 128 * 1024 * 1024,
+  // };
+  // /* ignore error */
+  // setrlimit(RLIMIT_MEMLOCK, &rlim);
+
+  // int sock_map = BpfUtils::bpf_create_map(BPF_MAP_TYPE_SOCKMAP, sizeof(int), sizeof(int), 2, 0);
+
+  // ENVOY_CONN_LOG(debug, "xydebug: sockmap {} created, errorno {}", read_callbacks_->connection(),
+  //  sock_map, strerror(errno));
+
+  bpf_object* obj = bpf_object__open("icept_bpf.o");
+  Utils::bpf_check_ptr(obj, "obj");
 }
 
 void Filter::onConnectTimeout() {
