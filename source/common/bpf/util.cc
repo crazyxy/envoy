@@ -37,11 +37,16 @@ void Utils::do_bpf_attach_prog(bpf_program* prog, int fd, bpf_attach_type type) 
 }
 
 void Utils::do_bpf_cleanup(bpf_object* obj, int map_fd) {
+  if (!obj) {
+    return;
+  }
+
   if (::close(map_fd)) {
     ::error(1, errno, "close sockmap");
   }
 
   bpf_object__close(obj);
+  obj = nullptr;
 }
 
 // #include <sys/syscall.h>

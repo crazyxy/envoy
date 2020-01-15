@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <string>
+#include <error.h>
+#include <poll.h>
 #include <sys/resource.h>
 
 #include "envoy/buffer/buffer.h"
@@ -15,7 +17,6 @@
 
 #include "common/access_log/access_log_impl.h"
 #include "common/common/assert.h"
-#include "common/bpf/util.h"
 #include "common/common/empty_string.h"
 #include "common/common/enum_to_int.h"
 #include "common/common/fmt.h"
@@ -454,6 +455,52 @@ void Filter::onPoolFailure(Tcp::ConnectionPool::PoolFailureReason reason,
   }
 }
 
+void Filter::setupBpf(int downstream_fd, int upstream_fd) {
+  ENVOY_CONN_LOG(debug, "Start loading bpf program. downstream fd {}, upstream fd {}",
+                 read_callbacks_->connection(), downstream_fd, upstream_fd);
+
+  obj_ = bpf_object__open("icept_bpf.o");
+  Utils::bpf_check_ptr(obj_, "obj");
+
+  auto prog_parse = Utils::do_bpf_get_prog(obj_, "sk_skb_parser", BPF_PROG_TYPE_SK_SKB);
+  auto prog_verdict = Utils::do_bpf_get_prog(obj_, "sk_skb_verdict", BPF_PROG_TYPE_SK_SKB);
+
+  if (bpf_object__load(obj_)) {
+    ::error(1, 0, "bpf object load: %ld", libbpf_get_error(obj_));
+  }
+  ENVOY_CONN_LOG(debug, "Bpf object loaded.", read_callbacks_->connection());
+
+  auto map = bpf_object__find_map_by_name(obj_, "sock_map");
+  Utils::bpf_check_ptr(map, "map");
+  map_fd_ = bpf_map__fd(map);
+
+  Utils::do_bpf_attach_prog(prog_parse, map_fd_, BPF_SK_SKB_STREAM_PARSER);
+  Utils::do_bpf_attach_prog(prog_verdict, map_fd_, BPF_SK_SKB_STREAM_VERDICT);
+
+  ENVOY_CONN_LOG(debug, "Bpf program attached.", read_callbacks_->connection());
+
+  int key = 0;
+  int ret = bpf_map_update_elem(map_fd_, &key, &downstream_fd, BPF_ANY);
+  if (ret) {
+    ::error(1, ret, "bpf sockmap insert downstream");
+  }
+  key = 1;
+  ret = bpf_map_update_elem(map_fd_, &key, &upstream_fd, BPF_ANY);
+  if (ret) {
+    ::error(1, ret, "bpf sockmap insert upstream");
+  }
+
+  // pollfd pfd{.fd = downstream_fd, .events = POLLRDHUP};
+  // ret = ::poll(&pfd, 1, -1);
+  // if (ret == -1) {
+  //   ::error(1, errno, "poll");
+  // }
+  // if (ret == 0) {
+  //   ::error(1, 0, "poll: timeout");
+  // }
+  // ENVOY_CONN_LOG(debug, "clean bpf program.", read_callbacks_->connection());
+}
+
 void Filter::onPoolReady(Tcp::ConnectionPool::ConnectionDataPtr&& conn_data,
                          Upstream::HostDescriptionConstSharedPtr host) {
   upstream_handle_ = nullptr;
@@ -475,24 +522,7 @@ void Filter::onPoolReady(Tcp::ConnectionPool::ConnectionDataPtr&& conn_data,
 
   read_callbacks_->continueReading();
 
-  ENVOY_CONN_LOG(debug, "xydebug: downstream fd {}, upstream fd {}", read_callbacks_->connection(),
-                 downstreamConnection()->fd(), connection.fd());
-
-  // /* [*] SOCKMAP requires more than 16MiB of locked mem */
-  // struct rlimit rlim = {
-  //     .rlim_cur = 128 * 1024 * 1024,
-  //     .rlim_max = 128 * 1024 * 1024,
-  // };
-  // /* ignore error */
-  // setrlimit(RLIMIT_MEMLOCK, &rlim);
-
-  // int sock_map = BpfUtils::bpf_create_map(BPF_MAP_TYPE_SOCKMAP, sizeof(int), sizeof(int), 2, 0);
-
-  // ENVOY_CONN_LOG(debug, "xydebug: sockmap {} created, errorno {}", read_callbacks_->connection(),
-  //  sock_map, strerror(errno));
-
-  bpf_object* obj = bpf_object__open("icept_bpf.o");
-  Utils::bpf_check_ptr(obj, "obj");
+  setupBpf(downstreamConnection()->fd(), connection.fd());
 }
 
 void Filter::onConnectTimeout() {
@@ -516,6 +546,12 @@ Network::FilterStatus Filter::onData(Buffer::Instance& data, bool end_stream) {
 }
 
 void Filter::onDownstreamEvent(Network::ConnectionEvent event) {
+  if (event == Network::ConnectionEvent::RemoteClose ||
+      event == Network::ConnectionEvent::LocalClose) {
+    ENVOY_CONN_LOG(debug, "clean bpf program.", read_callbacks_->connection());
+    Utils::do_bpf_cleanup(obj_, map_fd_);
+  }
+
   if (upstream_conn_data_) {
     if (event == Network::ConnectionEvent::RemoteClose) {
       upstream_conn_data_->connection().close(Network::ConnectionCloseType::FlushWrite);
@@ -564,6 +600,8 @@ void Filter::onUpstreamEvent(Network::ConnectionEvent event) {
 
   if (event == Network::ConnectionEvent::RemoteClose ||
       event == Network::ConnectionEvent::LocalClose) {
+    // ENVOY_CONN_LOG(debug, "clean bpf program.", read_callbacks_->connection());
+    // Utils::do_bpf_cleanup(obj_, map_fd_);
     upstream_conn_data_.reset();
     disableIdleTimer();
 
