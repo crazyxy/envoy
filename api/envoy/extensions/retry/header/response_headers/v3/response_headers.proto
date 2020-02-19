@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package envoy.extensions.retry.header.response_headers.v3;
+
+import "envoy/config/route/v3/route_components.proto";
+
+import "udpa/annotations/versioning.proto";
+
+option java_package = "io.envoyproxy.envoy.extensions.retry.header.response_headers.v3";
+option java_outer_classname = "ResponseHeadersProto";
+option java_multiple_files = true;
+
+message ResponseHeadersConfig {
+  option (udpa.annotations.versioning).previous_message_type =
+      "envoy.config.retry.response_headers.v2.ResponseHeadersConfig";
+
+  // Specifies the conditions under which retry takes place. These are the same
+  // conditions documented for
+  // :ref:`config_http_filters_router_x-envoy-retry-on` and
+  // :ref:`config_http_filters_router_x-envoy-retry-grpc-on`.
+  string retry_on = 1;
+
+  // HTTP status codes that should trigger a retry in addition to those
+  // specified by retry_on.
+  repeated uint32 retriable_status_codes = 2;
+
+  // HTTP response headers that trigger a retry if present in the response. A
+  // retry will be
+  // triggered if any of the header matches match the upstream response headers.
+  // The field is only consulted if 'retriable-headers' retry policy is active.
+  repeated config.route.v3.HeaderMatcher retriable_headers = 3;
+
+  // HTTP headers which must be present in the request for retries to be
+  // attempted.
+  repeated config.route.v3.HeaderMatcher retriable_request_headers = 4;
+}
