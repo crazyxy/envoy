@@ -287,7 +287,8 @@ RouteEntryImplBase::RouteEntryImplBase(const VirtualHostImpl& vhost,
       prefix_rewrite_redirect_(route.redirect().prefix_rewrite()),
       strip_query_(route.redirect().strip_query()),
       hedge_policy_(buildHedgePolicy(vhost.hedgePolicy(), route.route())),
-      retry_policy_(buildRetryPolicy(vhost.retryPolicy(), route.route(), validator)),
+      retry_policy_(buildRetryPolicy(vhost.retryPolicy(), vhost.extensionRetryPolicy(),
+                                     route.route(), validator)),
       rate_limit_policy_(route.route().rate_limits()),
       priority_(ConfigUtility::parsePriority(route.route().priority())),
       config_headers_(Http::HeaderUtility::buildHeaderDataVector(route.match().headers())),
@@ -666,22 +667,30 @@ HedgePolicyImpl RouteEntryImplBase::buildHedgePolicy(
   return HedgePolicyImpl();
 }
 
-RetryPolicyImpl RouteEntryImplBase::buildRetryPolicy(
+RetryPolicyPtr RouteEntryImplBase::buildRetryPolicy(
     const absl::optional<envoy::config::route::v3::RetryPolicy>& vhost_retry_policy,
+    const absl::optional<envoy::config::route::v3::ExtensionRetryPolicy>&
+        vhost_extension_retry_policy,
     const envoy::config::route::v3::RouteAction& route_config,
     ProtobufMessage::ValidationVisitor& validation_visitor) const {
   // Route specific policy wins, if available.
   if (route_config.has_retry_policy()) {
-    return RetryPolicyImpl(route_config.retry_policy(), validation_visitor);
+    return std::make_unique<RetryPolicyImpl>(route_config.retry_policy(), validation_visitor);
+  }
+
+  if (route_config.has_extension_retry_policy()) {
   }
 
   // If not, we fallback to the virtual host policy if there is one.
   if (vhost_retry_policy) {
-    return RetryPolicyImpl(vhost_retry_policy.value(), validation_visitor);
+    return std::make_unique<RetryPolicyImpl>(vhost_retry_policy.value(), validation_visitor);
+  }
+
+  if (vhost_extension_retry_policy) {
   }
 
   // Otherwise, an empty policy will do.
-  return RetryPolicyImpl();
+  return std::make_unique<RetryPolicyImpl>();
 }
 
 DecoratorConstPtr RouteEntryImplBase::parseDecorator(const envoy::config::route::v3::Route& route) {

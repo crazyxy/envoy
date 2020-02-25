@@ -150,6 +150,16 @@ public:
  */
 class RetryPolicy {
 public:
+  virtual ~RetryPolicy() = default;
+};
+
+using RetryPolicyPtr = std::unique_ptr<RetryPolicy>;
+
+/**
+ * Core route level retry policy.
+ */
+class CoreRetryPolicy : public RetryPolicy {
+public:
   // clang-format off
   static const uint32_t RETRY_ON_5XX                     = 0x1;
   static const uint32_t RETRY_ON_GATEWAY_ERROR           = 0x2;
@@ -166,7 +176,7 @@ public:
   static const uint32_t RETRY_ON_RETRIABLE_HEADERS       = 0x1000;
   // clang-format on
 
-  virtual ~RetryPolicy() = default;
+  virtual ~CoreRetryPolicy() = default;
 
   /**
    * @return std::chrono::milliseconds timeout per retry attempt.
@@ -229,17 +239,50 @@ public:
    * @return absl::optional<std::chrono::milliseconds> maximum retry interval
    */
   virtual absl::optional<std::chrono::milliseconds> maxInterval() const PURE;
+};
+
+/**
+ * A retry policy that specifies policy for retrying upstream requests.
+ */
+class ExtensionRetryPolicy : public RetryPolicy {
+public:
+  virtual ~ExtensionRetryPolicy() = default;
 
   /**
-   * @return std::string name of the pluggable retry policy
+   * Called when an upstream request has been completed with headers.
+   *
+   * @param response_header response header.
    */
-  virtual const std::string name() const PURE;
+  virtual void recordResponseHeaders(const Http::HeaderMap& response_header) PURE;
 
   /**
-   * @return Upstream::RetryPolicySharedPtr pluggable retry policy
+   * Called when an upstream request failed due to a reset.
+   *
+   * @param reset_reason reset reason.
    */
-  virtual Upstream::RetryPolicySharedPtr
-  retryPolicy(const Http::HeaderMap& request_headers) const PURE;
+  virtual void recordReset(Http::StreamResetReason reset_reason) PURE;
+
+  /**
+   * Determine if the request should be retried. The plugin can make the decision based on the
+   * request and reset records.
+   * @return a boolean value indicating if the request should be retried.
+   */
+  virtual bool shouldRetry() const PURE;
+};
+
+using ExtensionRetryPolicySharedPtr = std::shared_ptr<ExtensionRetryPolicy>;
+
+/**
+ * Factory for RetryPolicy
+ */
+class RetryPolicyFactory : public Config::TypedFactory {
+public:
+  virtual ~RetryPolicyFactory() = default;
+
+  virtual ExtensionRetryPolicySharedPtr
+  createRetryPolicy(const Protobuf::Message& config, const Http::HeaderMap& request_header) PURE;
+
+  std::string category() const override { return "envoy.retry_policy"; }
 };
 
 /**

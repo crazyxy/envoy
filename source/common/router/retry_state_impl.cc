@@ -41,7 +41,7 @@ RetryStatePtr RetryStateImpl::create(const RetryPolicy& route_policy,
 
   // We short circuit here and do not bother with an allocation if there is no chance we will retry.
   if (request_headers.EnvoyRetryOn() || request_headers.EnvoyRetryGrpcOn() ||
-      route_policy.retryOn() || !route_policy.name().empty()) {
+      route_policy.retryOn()) {
     ret.reset(new RetryStateImpl(route_policy, request_headers, cluster, runtime, random,
                                  dispatcher, priority));
   }
@@ -52,7 +52,8 @@ RetryStatePtr RetryStateImpl::create(const RetryPolicy& route_policy,
   return ret;
 }
 
-RetryStateImpl::RetryStateImpl(const RetryPolicy& route_policy, Http::HeaderMap& request_headers,
+RetryStateImpl::RetryStateImpl(const CoreRetryPolicy& route_policy,
+                               Http::HeaderMap& request_headers,
                                const Upstream::ClusterInfo& cluster, Runtime::Loader& runtime,
                                Runtime::RandomGenerator& random, Event::Dispatcher& dispatcher,
                                Upstream::ResourcePriority priority)
@@ -61,8 +62,7 @@ RetryStateImpl::RetryStateImpl(const RetryPolicy& route_policy, Http::HeaderMap&
       priority_(priority), retry_host_predicates_(route_policy.retryHostPredicates()),
       retry_priority_(route_policy.retryPriority()),
       retriable_status_codes_(route_policy.retriableStatusCodes()),
-      retriable_headers_(route_policy.retriableHeaders()),
-      pluggable_retry_policy_(route_policy.retryPolicy(request_headers)) {
+      retriable_headers_(route_policy.retriableHeaders()) {
   std::chrono::milliseconds base_interval(
       runtime_.snapshot().getInteger("upstream.base_retry_backoff_ms", 25));
   if (route_policy.baseInterval()) {
